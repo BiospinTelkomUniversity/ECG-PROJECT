@@ -3,8 +3,8 @@
 int sensorValue = 0;
 
 //definisi koefisien alpha
-float EMA_a_low = 0.3455;    //initialization of EMA alpha
-float EMA_a_high = 0.8202;
+float EMA_a_low = 0.3955;    //initialization of EMA alpha
+float EMA_a_high = 0.8402;
 
 //auto clean conditional for oled
 bool ElectrodePlug = false;
@@ -25,6 +25,10 @@ int lastX = 0;
 int lastY = 0;
 int lastTime = 0;
 
+//delay setting
+int periode = 100; //delay per 30 milidetik
+unsigned long time_now = 0;
+
 void setup() {
   oled.begin(SSD1306_SWITCHCAPVCC, OLED_Address);
   // initialize the serial communication:
@@ -43,57 +47,58 @@ void setup() {
 
 void loop() {
 
+  if (millis() > time_now + periode) {
 
-
-  if ((digitalRead(D4) == 1) || (digitalRead(D3) == 1)) {
-    Serial.println('!');
+    if ((digitalRead(D4) == 1) || (digitalRead(D3) == 1)) {
+      Serial.println('!');
       oled.clearDisplay();
-    oled.setTextColor(WHITE);
-    oled.setCursor(30, 0);
-    oled.println("ELEKTRODA");
-    oled.println("TIDAK TERPASANG");
+      oled.setTextColor(WHITE);
+      oled.setCursor(30, 0);
+      oled.println("ELEKTRODA");
+      oled.println("TIDAK TERPASANG");
 
-    ElectrodePlug = false;
-  }
-  else {
-
-    ElectrodePlug = true;
-
-    if (ElectrodePlug == 1) {
-      counterPlug++;
+      ElectrodePlug = false;
     }
-    if (ElectrodePlug == 1 && counterPlug > 5) {
-      if (x > 127) {
+    else {
 
-        oled.clearDisplay();
-        x = 0;
+      ElectrodePlug = true;
+
+      if (ElectrodePlug == 1) {
+        counterPlug++;
+      }
+      if (ElectrodePlug == 1 && counterPlug > 5) {
+        if (x > 127) {
+
+          oled.clearDisplay();
+          x = 0;
+
+        }
+
+
+        sensorValue = analogRead(A0);    //read the sensor value using ADC
+
+        //EXPONENTIAL MOVING AVERAGE
+        EMA_S_low = (EMA_a_low * sensorValue) + ((1 - EMA_a_low) * EMA_S_low);
+        EMA_S_high = (EMA_a_high * sensorValue) + ((1 - EMA_a_high) * EMA_S_high);
+
+        int filteredSignal = EMA_S_high - EMA_S_low;      //find the band-pass
+
+        Serial.println(filteredSignal);
+        yData = 32 - (filteredSignal / 8);
+
+        oled.writeLine(lastX, lastY, x, yData, WHITE);
+
+
+        lastY = yData;
+        lastX = x;
+
+        x++;
+
+
 
       }
-
-      sensorValue = analogRead(A0);    //read the sensor value using ADC
-
-      //EXPONENTIAL MOVING AVERAGE
-      EMA_S_low = (EMA_a_low * sensorValue) + ((1 - EMA_a_low) * EMA_S_low);
-      EMA_S_high = (EMA_a_high * sensorValue) + ((1 - EMA_a_high) * EMA_S_high);
-
-      int filteredSignal = EMA_S_high - EMA_S_low;      //find the band-pass
-
-      Serial.println(filteredSignal);
-      yData = 60 - (filteredSignal / 8);
-
-      oled.writeLine(lastX, lastY, x, yData, WHITE);
-
-
-      lastY = yData;
-      lastX = x;
-
-      x++;
-
-
-
     }
+
+    oled.display();
   }
-  //Wait for a bit to keep serial data from saturating
-  oled.display();
-  delay(10);
 }
