@@ -2,7 +2,7 @@
 #include <Wire.h>
 #include <Adafruit_SSD1306.h>
 int sensorValue = 0;
-
+int filteredSignal = 0;
 //definisi koefisien alpha
 float EMA_a_low = 0.3255;    //initialization of EMA alpha
 float EMA_a_high = 0.8202;
@@ -27,7 +27,7 @@ int lastY = 0;
 int lastTime = 0;
 
 //delay setting
-int periode = 2; //delay per 30 milidetik
+int periode = 15; //delay per 30 milidetik
 unsigned long time_now = 0;
 
 
@@ -63,6 +63,9 @@ void loop() {
 
 
   if ((digitalRead(D4) == 1) || (digitalRead(D3) == 1)) {
+
+
+
     Serial.println('!');
     oled.clearDisplay();
     oled.setTextColor(WHITE);
@@ -71,16 +74,21 @@ void loop() {
     oled.println("TIDAK TERPASANG");
 
     ElectrodePlug = false;
+
   }
   else {
+    if (ElectrodePlug == false) {
+      oled.clearDisplay();
+      oled.display();
+    }
 
     ElectrodePlug = true;
 
     if (ElectrodePlug == 1) {
       counterPlug++;
     }
-    if (ElectrodePlug == 1 && counterPlug > 5) {
-      if (x > 127) {
+    if (ElectrodePlug == 1 && counterPlug > 3) {
+      if (x > 128) {
 
         oled.clearDisplay();
         x = 0;
@@ -91,9 +99,9 @@ void loop() {
 
 
       sensorValue = analogRead(A0);    //read the sensor value using ADC
-      int filteredSignal = filterSignal(sensorValue);
-      Serial.println(filteredSignal);
-      yData = 32 - (filteredSignal / 16);
+      filteredSignal = filterSignal(sensorValue);
+
+      yData = 16 - (filteredSignal / 10);
 
 
 
@@ -101,11 +109,11 @@ void loop() {
 
     }
   }
-  delay(10);
+  delay(5);
 
   if (millis() > time_now + periode) {
     oled.writeLine(lastX, lastY, x, yData, WHITE);
-
+    Serial.println(yData);
 
     lastY = yData;
     lastX = x;
