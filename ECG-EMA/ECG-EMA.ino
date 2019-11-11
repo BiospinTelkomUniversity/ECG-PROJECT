@@ -4,7 +4,7 @@
 int sensorValue = 0;
 int filteredSignal = 0;
 //definisi koefisien alpha
-float EMA_a_low = 0.3255;    //initialization of EMA alpha
+float EMA_a_low = 0.4055;    //initialization of EMA alpha
 float EMA_a_high = 0.8202;
 
 //auto clean conditional for oled
@@ -67,6 +67,7 @@ void loop() {
 
 
     Serial.println('!');
+    oled.setRotation(2);
     oled.clearDisplay();
     oled.setTextColor(WHITE);
     oled.setCursor(30, 0);
@@ -76,52 +77,41 @@ void loop() {
     ElectrodePlug = false;
 
   }
-  else {
-    if (ElectrodePlug == false) {
-      oled.clearDisplay();
-      oled.display();
-    }
-
+  else if ((digitalRead(D4) == 0) || (digitalRead(D3) == 0)) {
     ElectrodePlug = true;
+  }
 
-    if (ElectrodePlug == 1) {
-      counterPlug++;
-    }
-    if (ElectrodePlug == 1 && counterPlug > 3) {
-      if (x > 128) {
+  if (ElectrodePlug == 1) {
 
-        oled.clearDisplay();
-        x = 0;
-        lastX = 0;
+    oled.setRotation(0);
+    if (x > 128) {
 
-
-      }
-
-
-      sensorValue = analogRead(A0);    //read the sensor value using ADC
-      filteredSignal = filterSignal(sensorValue);
-
-      yData = 16 - (filteredSignal / 10);
-
-
-
+      oled.clearDisplay();
+      x = 0;
+      lastX = 0;
 
 
     }
+
+
+    sensorValue = analogRead(A0);    //read the sensor value using ADC
+    filteredSignal = filterSignal(sensorValue);
+
+    yData = 8 - (filteredSignal / 8);
+
+    delay(20);
+
+    if (millis() > time_now + periode) {
+      oled.writeLine(lastX, lastY, x, yData, WHITE);
+      Serial.println(yData);
+
+      lastY = yData;
+      lastX = x;
+
+      x++;
+      oled.display();
+      time_now = millis();
+    }
   }
-  delay(5);
-
-  if (millis() > time_now + periode) {
-    oled.writeLine(lastX, lastY, x, yData, WHITE);
-    Serial.println(yData);
-
-    lastY = yData;
-    lastX = x;
-
-    x++;
-    oled.display();
-    time_now = millis();
-  }
-
 
 }
