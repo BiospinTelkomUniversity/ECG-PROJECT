@@ -4,7 +4,7 @@
 int sensorValue = 0;
 int filteredSignal = 0;
 //definisi koefisien alpha
-float EMA_a_low = 0.3255;    //initialization of EMA alpha
+float EMA_a_low = 0.5555;    //initialization of EMA alpha
 float EMA_a_high = 0.8202;
 
 //auto clean conditional for oled
@@ -16,7 +16,8 @@ int EMA_S_high = 0;
 
 //setup oled
 #define OLED_Address 0x3C
-//mengganti clock I2C default dari 100Khz menjadi 800Khz, hal ini diperlukan agar pada proses sampling dari ADC tidak ada mengalami 'aliasing'
+
+//custom clock speed, increase speed refresh rate
 Adafruit_SSD1306 oled(128, 64, &Wire, -1, 800000, 800000);
 int x = 0;
 int yData = 0;
@@ -42,86 +43,73 @@ int filterSignal(int analogValue) {
   return filteredSignal;
 }
 
+
+bool isAttach() {
+  if ((digitalRead(D5) == 1 && digitalRead(D6) == 1)) {
+    return false;
+  } else {
+    return true;
+  }
+}
+
 void setup() {
   oled.begin(SSD1306_SWITCHCAPVCC, OLED_Address);
   // initialize the serial communication:
   Serial.begin(115200);
-  pinMode(D4, INPUT); // Setup for leads off detection LO +
-  pinMode(D3, INPUT); // Setup for leads off detection LO -
+  pinMode(D5, INPUT); // Setup for leads off detection LO +
+  pinMode(D6, INPUT); // Setup for leads off detection LO -
 
   EMA_S_low = analogRead(A0);      //set EMA S for t=1
   EMA_S_high = analogRead(A0);
-
+  oled.setCursor(0, 0);
   oled.clearDisplay();
   oled.setTextColor(WHITE);
   oled.display();
+  delay(20);
 
 }
 
 void loop() {
 
-
-
-  if ((digitalRead(D4) == 1) || (digitalRead(D3) == 1)) {
-
-
-
-    Serial.println('!');
+  if (isAttach() == 0) {
+    oled.setRotation(2);
     oled.clearDisplay();
     oled.setTextColor(WHITE);
-    oled.setCursor(30, 0);
+    oled.setCursor(30, 20);
     oled.println("ELEKTRODA");
+    oled.setCursor(15, 35);
     oled.println("TIDAK TERPASANG");
+    oled.display();
 
-    ElectrodePlug = false;
+  } else if (isAttach() == 1) {
+    oled.setRotation(0);
+    if (x > 128) {
 
-  }
-  else {
-    if (ElectrodePlug == false) {
       oled.clearDisplay();
+      x = 0;
+      lastX = 0;
+    }
+
+    sensorValue = analogRead(A0);    //read the sensor value using ADC
+
+    delay(20);
+    filteredSignal = filterSignal(sensorValue);
+    if (millis() > time_now + periode) {
+      yData = 16 - (filteredSignal / 4);
+      oled.writeLine(lastX, lastY, x, yData, WHITE);
+      Serial.println(yData);
+
+      lastY = yData;
+      lastX = x;
+
+      x++;
+      time_now = millis();
       oled.display();
     }
-
-    ElectrodePlug = true;
-
-    if (ElectrodePlug == 1) {
-      counterPlug++;
-    }
-    if (ElectrodePlug == 1 && counterPlug > 3) {
-      if (x > 128) {
-
-        oled.clearDisplay();
-        x = 0;
-        lastX = 0;
-
-
-      }
-
-
-      sensorValue = analogRead(A0);    //read the sensor value using ADC
-      filteredSignal = filterSignal(sensorValue);
-
-      yData = 16 - (filteredSignal / 10);
-
-
-
-
-
-    }
   }
-  delay(5);
 
-  if (millis() > time_now + periode) {
-    oled.writeLine(lastX, lastY, x, yData, WHITE);
-    Serial.println(yData);
 
-    lastY = yData;
-    lastX = x;
 
-    x++;
-    oled.display();
-    time_now = millis();
-  }
 
 
 }
