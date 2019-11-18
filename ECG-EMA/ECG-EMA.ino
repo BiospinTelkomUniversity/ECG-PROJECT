@@ -1,15 +1,16 @@
 
 #include <Wire.h>
 #include <Adafruit_SSD1306.h>
+
 int sensorValue = 0;
 int filteredSignal = 0;
 //definisi koefisien alpha
 float EMA_a_low = 0.5555;    //initialization of EMA alpha
 float EMA_a_high = 0.8202;
 
-//auto clean conditional for oled
+//Reserve for adjusting flow program
 bool ElectrodePlug = false;
-int counterPlug = 0;
+bool lastPlug = false;
 
 int EMA_S_low = 0;          //initialization of EMA S
 int EMA_S_high = 0;
@@ -28,7 +29,7 @@ int lastY = 0;
 int lastTime = 0;
 
 //delay setting
-int periode = 15; //delay per 30 milidetik
+int periode = 15; //delay per 15 milidetik
 unsigned long time_now = 0;
 
 
@@ -42,7 +43,6 @@ int filterSignal(int analogValue) {
 
   return filteredSignal;
 }
-
 
 bool isAttach() {
   if ((digitalRead(D5) == 1 && digitalRead(D6) == 1)) {
