@@ -1,15 +1,18 @@
-
+#include <FirebaseArduino.h>
+#include <Firebase.h>
 #include <Wire.h>
 #include <Adafruit_SSD1306.h>
+
+
 int sensorValue = 0;
 int filteredSignal = 0;
 //definisi koefisien alpha
-float EMA_a_low = 0.5555;    //initialization of EMA alpha
+float EMA_a_low = 0.5855;    //initialization of EMA alpha
 float EMA_a_high = 0.8202;
 
-//auto clean conditional for oled
+//Reserve for adjusting flow program
 bool ElectrodePlug = false;
-int counterPlug = 0;
+bool lastPlug = false;
 
 int EMA_S_low = 0;          //initialization of EMA S
 int EMA_S_high = 0;
@@ -28,7 +31,7 @@ int lastY = 0;
 int lastTime = 0;
 
 //delay setting
-int periode = 15; //delay per 30 milidetik
+int periode = 15; //delay per 15 milidetik
 unsigned long time_now = 0;
 
 
@@ -42,7 +45,6 @@ int filterSignal(int analogValue) {
 
   return filteredSignal;
 }
-
 
 bool isAttach() {
   if ((digitalRead(D5) == 1 && digitalRead(D6) == 1)) {
@@ -80,10 +82,22 @@ void loop() {
     oled.setCursor(15, 35);
     oled.println("TIDAK TERPASANG");
     oled.display();
+    lastPlug = 0;
 
   } else if (isAttach() == 1) {
+
+
     oled.setRotation(0);
-    if (x > 128) {
+
+    // kasus tengah jalan keputus
+    if (isAttach() == 1 && lastPlug == 0) {
+      oled.clearDisplay();
+      x = 0;
+      lastX = 0;
+
+    }
+    //kondisi overflow, perlu di reset lagi
+    else if (x > 128) {
 
       oled.clearDisplay();
       x = 0;
@@ -95,7 +109,7 @@ void loop() {
     delay(20);
     filteredSignal = filterSignal(sensorValue);
     if (millis() > time_now + periode) {
-      yData = 16 - (filteredSignal / 4);
+      yData = 16 - (filteredSignal / 5);
       oled.writeLine(lastX, lastY, x, yData, WHITE);
       Serial.println(yData);
 
@@ -106,6 +120,7 @@ void loop() {
       time_now = millis();
       oled.display();
     }
+    lastPlug = 1;
   }
 
 
