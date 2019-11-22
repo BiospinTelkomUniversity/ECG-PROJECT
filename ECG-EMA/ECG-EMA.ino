@@ -3,7 +3,6 @@
 #include <Wire.h>
 #include <Adafruit_SSD1306.h>
 
-
 int sensorValue = 0;
 int filteredSignal = 0;
 //definisi koefisien alpha
