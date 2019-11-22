@@ -1,13 +1,21 @@
+#include <ESP8266WiFi.h>
 #include <FirebaseArduino.h>
 #include <Firebase.h>
 #include <Wire.h>
 #include <Adafruit_SSD1306.h>
 
 
+#define FIREBASE_HOST "pengmas-ekg.firebaseio.com"
+#define FIREBASE_AUTH "4mkZwqFND27ZoFf7DUlvCAppYXm1eOR1OCq7pwth"
+
+#define NAMA_AP "lab104"
+#define PASSWD "enaksekali"
+
+
 int sensorValue = 0;
 int filteredSignal = 0;
 //definisi koefisien alpha
-float EMA_a_low = 0.5855;    //initialization of EMA alpha
+float EMA_a_low = 0.5055;    //initialization of EMA alpha
 float EMA_a_high = 0.8202;
 
 //Reserve for adjusting flow program
@@ -31,7 +39,7 @@ int lastY = 0;
 int lastTime = 0;
 
 //delay setting
-int periode = 15; //delay per 15 milidetik
+int periode = 7; //delay per 7 milidetik sampling rate=160Hz
 unsigned long time_now = 0;
 
 
@@ -55,6 +63,10 @@ bool isAttach() {
 }
 
 void setup() {
+  WiFi.begin(NAMA_AP, PASSWD);
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+  }
   oled.begin(SSD1306_SWITCHCAPVCC, OLED_Address);
   // initialize the serial communication:
   Serial.begin(115200);
@@ -104,12 +116,14 @@ void loop() {
       lastX = 0;
     }
 
-    sensorValue = analogRead(A0);    //read the sensor value using ADC
 
-    delay(20);
-    filteredSignal = filterSignal(sensorValue);
+
+    //    delay(20);
+
     if (millis() > time_now + periode) {
-      yData = 16 - (filteredSignal / 5);
+      sensorValue = analogRead(A0);    //read the sensor value using ADC
+      filteredSignal = filterSignal(sensorValue);
+      yData = 16 - (filteredSignal / 7);
       oled.writeLine(lastX, lastY, x, yData, WHITE);
       Serial.println(yData);
 
