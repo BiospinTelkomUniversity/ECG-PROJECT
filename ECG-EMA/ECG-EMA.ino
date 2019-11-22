@@ -116,10 +116,6 @@ void loop() {
       lastX = 0;
     }
 
-
-
-    //    delay(20);
-
     if (millis() > time_now + periode) {
       sensorValue = analogRead(A0);    //read the sensor value using ADC
       filteredSignal = filterSignal(sensorValue);
