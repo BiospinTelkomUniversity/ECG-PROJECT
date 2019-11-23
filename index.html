@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Welcome to Firebase Hosting</title>
+  <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css">
+
+  <!-- jQuery library -->
+  <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.4.1/jquery.min.js"></script>
+
+  <!-- Popper JS -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.14.7/umd/popper.min.js"></script>
+
+  <!-- Latest compiled JavaScript -->
+  <script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.3.1/js/bootstrap.min.js"></script>
+  <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css"
+    integrity="sha384-ggOyR0iXCbMQv3Xipma34MD+dH/1fQ784/j6cY/iJTQUOhcWr7x9JvoRxT2MZw1T" crossorigin="anonymous">
+</head>
+
+<body>
+  <nav class="barbar mb-1 navbar navbar-expand-lg m-4"
+    style="background:#add8e6;border-radius: 8px;border: 1px solid #eceff1;box-shadow: 0 1px 2px 0 rgba(60, 64, 67, .3), 0 1px 3px 1px rgba(60, 64, 67, .15);">
+    <div class="container">
+      <div class="nav navbar-nav mx-auto">
+
+        <a class="navbar-brand" href="http://biospinlab.com/">
+          <strong class="text-dark" style="font-size: 20px;">BioSPIN Laboratory</strong>
+        </a>
+      </div>
+      <div class="nav navbar-nav mx-auto ml-5">
+        <marquee behavior="" direction="" scrollamount="3">
+          <h1 class="text-white" align="center"><strong>ECG Monitoring System</strong></h1>
+        </marquee>
+      </div>
+      <ul class="navbar-nav ml-auto nav-flex-icons mx-auto">
+        <li class="nav-item avatar">
+          <a class="nav-link p-0 mr-5" href="#">
+            <img src="img/biospinlogo.png" class="rounded-circle z-depth-0" alt="logo" height="90">
+          </a>
+        </li>
+      </ul>
+  </nav>
+
+  <!-- The core Firebase JS SDK is always required and must be listed first -->
+<script src="https://www.gstatic.com/firebasejs/7.5.0/firebase-app.js"></script>
+
+<!-- TODO: Add SDKs for Firebase products that you want to use
+     https://firebase.google.com/docs/web/setup#available-libraries -->
+
+<script>
+  // Your web app's Firebase configuration
+  var firebaseConfig = {
+    apiKey: "AIzaSyCQW7ZPxs2rTUBYzOJm9zgcM6iBCVA1oOw",
+    authDomain: "pengmas-ekg.firebaseapp.com",
+    databaseURL: "https://pengmas-ekg.firebaseio.com",
+    projectId: "pengmas-ekg",
+    storageBucket: "pengmas-ekg.appspot.com",
+    messagingSenderId: "535246877471",
+    appId: "1:535246877471:web:cae49fe84554197a86f62a"
+  };
+  // Initialize Firebase
+  firebase.initializeApp(firebaseConfig);
+</script> 
+  
+  <div class="container">
+    <div class="row justify-content-md-center mt-lg-5">
+      <div class="text-center">
+        <h5 class="card-title text-center"></h5>
+        <div class="card rounded">
+          <div class="card-header bg-muted text-center">
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+
+</html>
