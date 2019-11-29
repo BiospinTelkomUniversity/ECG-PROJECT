@@ -23,15 +23,6 @@ const char* mqttPassword = "YourMqttUserPassword";
 int sensorValue = 0;
 int filteredSignal = 0;
 
-//BUTTERWORTH FILTER CONSTANT
-
-#define NZEROS 8
-#define NPOLES 8
-#define GAIN   3.807081066e+00
-
-static float xv[NZEROS + 1], yv[NPOLES + 1];
-
-
 //Reserve for adjusting flow program
 bool ElectrodePlug = false;
 bool lastPlug = false;
@@ -57,7 +48,18 @@ int periode = 10; //delay per 10 milidetik sampling rate=100Hz
 unsigned long time_now = 0;
 unsigned long time_now2 = 0;
 
-int filterSignal(int analogValue) {
+//BUTTERWORTH FILTER CONSTANT
+// Fc1 =0.5Hz Fc2=40Hz
+// jumlah ordo = 5
+
+
+#define NZEROS_BPF 8
+#define NPOLES_BPF 8
+#define GAIN   3.807081066e+00
+
+static float xv[NZEROS_BPF + 1], yv[NPOLES_BPF + 1];
+
+int BandPassFilter(int analogValue) {
   xv[0] = xv[1]; xv[1] = xv[2]; xv[2] = xv[3]; xv[3] = xv[4]; xv[4] = xv[5]; xv[5] = xv[6]; xv[6] = xv[7]; xv[7] = xv[8];
   xv[8] = analogValue / GAIN;
   yv[0] = yv[1]; yv[1] = yv[2]; yv[2] = yv[3]; yv[3] = yv[4]; yv[4] = yv[5]; yv[5] = yv[6]; yv[6] = yv[7]; yv[7] = yv[8];
@@ -66,9 +68,23 @@ int filterSignal(int analogValue) {
             + (  0.1988344065 * yv[2]) + (  0.8672882976 * yv[3])
             + ( -0.5531263498 * yv[4]) + ( -0.7286735628 * yv[5])
             + ( -0.9163679567 * yv[6]) + (  2.3587872690 * yv[7]);
-  filteredSignal = yv[8];
+  return yv[8];
+}
+/*HIGHPASS FILTER*/
 
-  return filteredSignal;
+#define NZEROS_HPF 2
+#define NPOLES_HPF 2
+#define GAIN_HPF   1.052651765e+00
+
+static float xvHPF[NZEROS_HPF + 1], yvHPF[NPOLES_HPF + 1];
+
+int HighPassFilter(int analogValue) {
+  xvHPF[0] = xvHPF[1]; xvHPF[1] = xvHPF[2];
+  xvHPF[2] =analogValue/ GAIN_HPF;
+  yvHPF[0] = yvHPF[1]; yvHPF[1] = yvHPF[2];
+  yvHPF[2] =   (xvHPF[0] + xvHPF[2]) - 2 * xvHPF[1]
+            + ( -0.9565436765 * yvHPF[0]) + (  1.9555782403 * yvHPF[1]);
+  return yvHPF[2];
 }
 
 bool isAttach() {
@@ -158,12 +174,13 @@ void loop() {
     if (millis() > time_now2 + periode) {
       time_now2 = millis();
       sensorValue = analogRead(A0);    //read the sensor value using ADC
-      filteredSignal = filterSignal(sensorValue);
+      filteredSignal = BandPassFilter(HighPassFilter(sensorValue));
+      Serial.println(filteredSignal);
     }
 
     if (millis() > time_now + periode) {
-      
-      yData = 32 - (filteredSignal / 16);
+
+      yData = 32 - (filteredSignal / 18);
       oled.writeLine(lastX, lastY, x, yData, WHITE);
 
       lastY = yData;
