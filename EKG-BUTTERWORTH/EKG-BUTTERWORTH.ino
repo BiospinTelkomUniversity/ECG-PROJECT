@@ -1,25 +1,58 @@
+#include <Adafruit_MQTT.h>
+#include <Adafruit_MQTT_Client.h>
+
+
 #include <ESP8266WiFi.h>
-#include <PubSubClient.h>
 #include <Wire.h>
 #include <Adafruit_SSD1306.h>
 
 
-#define FIREBASE_HOST "pengmas-ekg.firebaseio.com"
-#define FIREBASE_AUTH "4mkZwqFND27ZoFf7DUlvCAppYXm1eOR1OCq7pwth"
-
-#define NAMA_AP "lab104portable"
+#define NAMA_AP "lab104"
 #define PASSWD "enaksekali"
 
 
-//MQTT Setup
-const char* mqttServer = "m11.cloudmqtt.com";
-const int mqttPort = 12948;
-const char* mqttUser = "YourMqttUser";
-const char* mqttPassword = "YourMqttUserPassword";
+/************************* Adafruit.io Setup *********************************/
 
-//WiFiClient espClient;
-//PubSubClient client(espClient);
+#define AIO_SERVER      "io.adafruit.com"
+#define AIO_SERVERPORT  1883                   // use 8883 for SSL
+#define AIO_USERNAME    "serabiasin"
+#define AIO_KEY         "13eb40d3377844f697e7f69810fb4d6f"
 
+WiFiClient client;
+Adafruit_MQTT_Client mqtt(&client, AIO_SERVER, AIO_SERVERPORT, AIO_USERNAME, AIO_KEY);
+// publish ekg data
+Adafruit_MQTT_Publish dataSinyal = Adafruit_MQTT_Publish(&mqtt, AIO_USERNAME "/feeds/project-ekg.hardware1");
+
+// Function to connect and reconnect as necessary to the MQTT server.
+// Should be called in the loop function and it will take care if connecting.
+void MQTT_connect() {
+  int8_t ret;
+
+  // Stop if already connected.
+  if (mqtt.connected()) {
+    return;
+  }
+
+  Serial.print("Connecting to MQTT... ");
+
+  uint8_t retries = 3;
+  while ((ret = mqtt.connect()) != 0) { // connect will return 0 for connected
+    Serial.println(mqtt.connectErrorString(ret));
+    Serial.println("Retrying MQTT connection in 5 seconds...");
+    mqtt.disconnect();
+    unsigned long time_connect = millis();
+    int wait_time = 5000;
+    //wait 5 second
+    while (millis() < time_connect + wait_time);
+    retries--;
+    if (retries == 0) {
+      // basically die and wait for WDT to reset me
+      while (1);
+    }
+  }
+  Serial.println("MQTT Connected!");
+}
+/************************* END SETUP MQTT*********************************/
 int sensorValue = 0;
 int filteredSignal = 0;
 
@@ -45,14 +78,16 @@ int lastTime = 0;
 
 //delay setting
 int periode = 10; //delay per 10 milidetik sampling rate=100Hz
+int periode_mqtt = 1000; //delay per 1 detik (ngecek performa)
 unsigned long time_now = 0;
 unsigned long time_now2 = 0;
+unsigned long time_now3 = 0; //time now untuk mqtt
+
+
 
 //BUTTERWORTH FILTER CONSTANT
-// Fc1 =0.5Hz Fc2=40Hz
+// Fc1 =0.5Hz Fc2=35Hz
 // jumlah ordo = 5
-
-
 #define NZEROS_BPF 8
 #define NPOLES_BPF 8
 #define GAIN   3.807081066e+00
@@ -80,10 +115,10 @@ static float xvHPF[NZEROS_HPF + 1], yvHPF[NPOLES_HPF + 1];
 
 int HighPassFilter(int analogValue) {
   xvHPF[0] = xvHPF[1]; xvHPF[1] = xvHPF[2];
-  xvHPF[2] =analogValue/ GAIN_HPF;
+  xvHPF[2] = analogValue / GAIN_HPF;
   yvHPF[0] = yvHPF[1]; yvHPF[1] = yvHPF[2];
   yvHPF[2] =   (xvHPF[0] + xvHPF[2]) - 2 * xvHPF[1]
-            + ( -0.9565436765 * yvHPF[0]) + (  1.9555782403 * yvHPF[1]);
+               + ( -0.9565436765 * yvHPF[0]) + (  1.9555782403 * yvHPF[1]);
   return yvHPF[2];
 }
 
@@ -97,6 +132,10 @@ bool isAttach() {
 
 void setup() {
 
+  // initialize the serial communication:
+  Serial.begin(115200);
+  pinMode(D5, INPUT); // Setup for leads off detection LO +
+  pinMode(D6, INPUT); // Setup for leads off detection LO -
 
   oled.begin(SSD1306_SWITCHCAPVCC, OLED_Address);
   oled.setCursor(0, 0);
@@ -107,40 +146,19 @@ void setup() {
 
 
   /*WIFI INITIALIZATION*/
-  //  WiFi.begin(NAMA_AP, PASSWD);
-  //  while (WiFi.status() != WL_CONNECTED) {
-  //    delay(500);
-  //  }
+  WiFi.begin(NAMA_AP, PASSWD);
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+  }
 
-  /*MQTT INITIALIZATION*/
-  //  while (!client.connected()) {
-  //    Serial.println("Connecting to MQTT...");
-  //
-  //    if (client.connect("ESP8266Client", mqttUser, mqttPassword )) {
-  //
-  //      Serial.println("connected");
-  //
-  //    } else {
-  //
-  //      Serial.print("failed with state ");
-  //      Serial.print(client.state());
-  //      delay(2000);
-  //
-  //    }
-  //  }
 
-  // initialize the serial communication:
-  Serial.begin(115200);
-  pinMode(D5, INPUT); // Setup for leads off detection LO +
-  pinMode(D6, INPUT); // Setup for leads off detection LO -
 
-  EMA_S_low = analogRead(A0);      //set EMA S for t=1
-  EMA_S_high = analogRead(A0);
+
 
 }
 
 void loop() {
-
+  MQTT_connect();
   if (isAttach() == 0) {
     oled.setRotation(2);
     oled.clearDisplay();
@@ -171,11 +189,19 @@ void loop() {
       x = 0;
       lastX = 0;
     }
+    if (millis() > time_now3 + periode_mqtt) {
+      if (!dataSinyal.publish(filteredSignal)) {
+        Serial.println("Failed");
+      } else {
+        Serial.println("OK");
+      }
+      time_now3 = millis();
+    }
     if (millis() > time_now2 + periode) {
       time_now2 = millis();
       sensorValue = analogRead(A0);    //read the sensor value using ADC
       filteredSignal = BandPassFilter(HighPassFilter(sensorValue));
-      Serial.println(filteredSignal);
+      
     }
 
     if (millis() > time_now + periode) {
