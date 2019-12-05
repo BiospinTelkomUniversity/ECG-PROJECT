@@ -38,11 +38,34 @@ int lastTime = 0;
 
 //delay setting
 int periode = 10; //delay per 10 milidetik sampling rate=100Hz
-int periode_mqtt = 1000; //delay per 1 detik (ngecek performa)
 unsigned long time_now = 0;
 unsigned long time_now2 = 0;
 unsigned long time_now3 = 0; //time now untuk mqtt
 
+
+/*Bandstop Filter
+  Fc=50Hz
+   Ordo = 3
+*/
+
+#define NZEROS_BSF 6
+#define NPOLES_BSF 6
+#define GAIN_BSF   1.000000023e+00
+
+static float xvBSF[NZEROS_BSF + 1], yvBSF[NPOLES_BSF + 1];
+
+float BandStopFilter(float analogValue) {
+
+  xvBSF[0] = xvBSF[1]; xvBSF[1] = xvBSF[2]; xvBSF[2] = xvBSF[3]; xvBSF[3] = xvBSF[4]; xvBSF[4] = xvBSF[5]; xvBSF[5] = xvBSF[6];
+  xvBSF[6] = analogValue / GAIN_BSF;
+  yvBSF[0] = yvBSF[1]; yvBSF[1] = yvBSF[2]; yvBSF[2] = yvBSF[3]; yvBSF[3] = yvBSF[4]; yvBSF[4] = yvBSF[5]; yvBSF[5] = yvBSF[6];
+  yvBSF[6] =   (xvBSF[0] + xvBSF[6]) +   5.9881603706 * (xvBSF[1] + xvBSF[5]) +  14.9526882080 * (xvBSF[2] + xvBSF[4])
+               +  19.9290556130 * xvBSF[3]
+               + ( -1.0000000000 * yvBSF[0]) + ( -5.9881603706 * yvBSF[1])
+               + (-14.9526882080 * yvBSF[2]) + (-19.9290556130 * yvBSF[3])
+               + (-14.9526882080 * yvBSF[4]) + ( -5.9881603706 * yvBSF[5]);
+  return yvBSF[6];
+}
 
 
 //BUTTERWORTH FILTER CONSTANT
@@ -90,22 +113,24 @@ float HighPassFilter(int analogValue) {
 
 /*LPF
   Fc : 35
-  Ordo :  3
+  Ordo :  6
 */
-#define NZEROS_LPF 4
-#define NPOLES_LPF 4
-#define GAIN_LPF   3.630906871e+00
+#define NZEROS_LPF 6
+#define NPOLES_LPF 6
+#define GAIN_LPF  6.768991272e+00
 
 static float xvLPF[NZEROS_LPF + 1], yvLPF[NPOLES_LPF + 1];
 
 int LowPassFilter(float analogValue) {
-  xvLPF[0] = xvLPF[1]; xvLPF[1] = xvLPF[2]; xvLPF[2] = xvLPF[3]; xvLPF[3] = xvLPF[4];
-  xvLPF[4] = analogValue / GAIN;
-  yvLPF[0] = yvLPF[1]; yvLPF[1] = yvLPF[2]; yvLPF[2] = yvLPF[3]; yvLPF[3] = yvLPF[4];
-  yvLPF[4] =   (xvLPF[0] + xvLPF[4]) + 4 * (xvLPF[1] + xvLPF[3]) + 6 * xvLPF[2]
-               + ( -0.0761970646 * yvLPF[0]) + ( -0.4844033683 * yvLPF[1])
-               + ( -1.2756133250 * yvLPF[2]) + ( -1.5703988512 * yvLPF[3]);
-  return yvLPF[4];
+  xvLPF[0] = xvLPF[1]; xvLPF[1] = xvLPF[2]; xvLPF[2] = xvLPF[3]; xvLPF[3] = xvLPF[4]; xvLPF[4] = xvLPF[5]; xvLPF[5] = xvLPF[6];
+  xvLPF[6] = analogValue / GAIN;
+  yv[0] = yvLPF[1]; yvLPF[1] = yvLPF[2]; yvLPF[2] = yvLPF[3]; yvLPF[3] = yvLPF[4]; yvLPF[4] = yvLPF[5]; yvLPF[5] = yvLPF[6];
+  yvLPF[6] =   (xvLPF[0] + xvLPF[6]) + 6 * (xvLPF[1] + xvLPF[5]) + 15 * (xvLPF[2] + xvLPF[4])
+               + 20 * xvLPF[3]
+               + ( -0.0218315740 * yvLPF[0]) + ( -0.2098654504 * yvLPF[1])
+               + ( -0.8779238976 * yvLPF[2]) + ( -2.0551314368 * yvLPF[3])
+               + ( -2.9104065679 * yvLPF[4]) + ( -2.3797210446 * yvLPF[5]);
+  return yvLPF[6];
 }
 
 
@@ -190,14 +215,16 @@ void loop() {
     if (millis() > time_now2 + periode) {
       time_now2 = millis();
       sensorValue = analogRead(A0);    //read the sensor value using ADC
-      filteredSignal = BandPassFilter(HighPassFilter(sensorValue));
+      filteredSignal = BandStopFilter(sensorValue);
+      filteredSignal = HighPassFilter(filteredSignal );
+      filteredSignal = BandPassFilter(filteredSignal);
       filteredSignal = LowPassFilter(filteredSignal);
 
     }
 
     if (millis() > time_now + periode) {
 
-      yData = 32 - (filteredSignal / 14);
+      yData = 20 - (filteredSignal / 32);
       oled.writeLine(lastX, lastY, x, yData, WHITE);
 
       lastY = yData;
