@@ -1,11 +1,29 @@
-
+#include <ESP8266WiFi.h>
+#include <PubSubClient.h>
 #include <Wire.h>
 #include <Adafruit_SSD1306.h>
+
+
+#define FIREBASE_HOST "pengmas-ekg.firebaseio.com"
+#define FIREBASE_AUTH "4mkZwqFND27ZoFf7DUlvCAppYXm1eOR1OCq7pwth"
+
+#define NAMA_AP "lab104portable"
+#define PASSWD "enaksekali"
+
+
+//MQTT Setup
+const char* mqttServer = "m11.cloudmqtt.com";
+const int mqttPort = 12948;
+const char* mqttUser = "YourMqttUser";
+const char* mqttPassword = "YourMqttUserPassword";
+
+//WiFiClient espClient;
+//PubSubClient client(espClient);
 
 int sensorValue = 0;
 int filteredSignal = 0;
 //definisi koefisien alpha
-float EMA_a_low = 0.5555;    //initialization of EMA alpha
+float EMA_a_low = 0.6555;    //initialization of EMA alpha
 float EMA_a_high = 0.8202;
 
 //Reserve for adjusting flow program
@@ -29,9 +47,9 @@ int lastY = 0;
 int lastTime = 0;
 
 //delay setting
-int periode = 15; //delay per 15 milidetik
+int periode = 10; //delay per 10 milidetik sampling rate=100Hz
 unsigned long time_now = 0;
-
+unsigned long time_now2 = 0;
 
 int filterSignal(int analogValue) {
 
@@ -53,7 +71,39 @@ bool isAttach() {
 }
 
 void setup() {
+
+
   oled.begin(SSD1306_SWITCHCAPVCC, OLED_Address);
+  oled.setCursor(0, 0);
+  oled.clearDisplay();
+  oled.setTextColor(WHITE);
+  oled.display();
+  delay(20);
+
+
+  /*WIFI INITIALIZATION*/
+//  WiFi.begin(NAMA_AP, PASSWD);
+//  while (WiFi.status() != WL_CONNECTED) {
+//    delay(500);
+//  }
+
+  /*MQTT INITIALIZATION*/
+//  while (!client.connected()) {
+//    Serial.println("Connecting to MQTT...");
+//
+//    if (client.connect("ESP8266Client", mqttUser, mqttPassword )) {
+//
+//      Serial.println("connected");
+//
+//    } else {
+//
+//      Serial.print("failed with state ");
+//      Serial.print(client.state());
+//      delay(2000);
+//
+//    }
+//  }
+
   // initialize the serial communication:
   Serial.begin(115200);
   pinMode(D5, INPUT); // Setup for leads off detection LO +
@@ -61,11 +111,6 @@ void setup() {
 
   EMA_S_low = analogRead(A0);      //set EMA S for t=1
   EMA_S_high = analogRead(A0);
-  oled.setCursor(0, 0);
-  oled.clearDisplay();
-  oled.setTextColor(WHITE);
-  oled.display();
-  delay(20);
 
 }
 
@@ -80,24 +125,36 @@ void loop() {
     oled.setCursor(15, 35);
     oled.println("TIDAK TERPASANG");
     oled.display();
+    lastPlug = 0;
 
   } else if (isAttach() == 1) {
+
+
     oled.setRotation(0);
-    if (x > 128) {
+
+    // kasus tengah jalan keputus
+    if (isAttach() == 1 && lastPlug == 0) {
+      oled.clearDisplay();
+      x = 0;
+      lastX = 0;
+
+    }
+    //kondisi overflow, perlu di reset lagi
+    else if (x > 128) {
 
       oled.clearDisplay();
       x = 0;
       lastX = 0;
     }
+    if (millis() > time_now2 + periode) {
+      time_now2 = millis();
+      sensorValue = analogRead(A0);    //read the sensor value using ADC
+      filteredSignal = filterSignal(sensorValue);
+    }
 
-    sensorValue = analogRead(A0);    //read the sensor value using ADC
-
-    delay(20);
-    filteredSignal = filterSignal(sensorValue);
     if (millis() > time_now + periode) {
-      yData = 16 - (filteredSignal / 4);
+      yData = 16 - (filteredSignal / 6);
       oled.writeLine(lastX, lastY, x, yData, WHITE);
-      Serial.println(yData);
 
       lastY = yData;
       lastX = x;
@@ -105,7 +162,9 @@ void loop() {
       x++;
       time_now = millis();
       oled.display();
+
     }
+    lastPlug = 1;
   }
 
 
