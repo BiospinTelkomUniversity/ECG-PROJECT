@@ -1,7 +1,4 @@
-#include <Adafruit_MQTT.h>
-#include <Adafruit_MQTT_Client.h>
-
-
+#include <PubSubClient.h>
 #include <ESP8266WiFi.h>
 #include <Wire.h>
 #include <Adafruit_SSD1306.h>
@@ -11,7 +8,39 @@
 #define PASSWD ""
 
 
-WiFiClient client;
+
+/*INITIALIZATION MQTT*/
+const char* mqttUser = "";
+const char* mqttPassword = "";
+const char* mqtt_server = "";
+const int mqttPort = 1883;
+
+WiFiClient espclient;
+PubSubClient mqttHardware(espclient);
+
+void reconnect() {
+  // Loop until we're reconnected
+  while (!mqttHardware.connected()) {
+    Serial.print("Attempting MQTT connection...");
+    // Create a random client ID
+    String clientId = "ESP8266Client-";
+    clientId += String(random(0xffff), HEX);
+    // Attempt to connect
+    if (mqttHardware.connect(clientId.c_str())) {
+    } else {
+      Serial.print("failed, rc=");
+      Serial.print(mqttHardware.state());
+      Serial.println(" try again in 5 seconds");
+      
+      // Wait 5 seconds before retrying
+      unsigned long interval_now = millis();
+      while (millis() > interval_now + 5000);
+    }
+  }
+}
+
+
+/*END*/
 
 int sensorValue = 0;
 int filteredSignal = 0;
@@ -38,8 +67,9 @@ int lastTime = 0;
 
 //delay setting
 int periode = 10; //delay per 10 milidetik sampling rate=100Hz
-unsigned long time_now = 0;
-unsigned long time_now2 = 0;
+int periode_mqtt = 10;
+unsigned long time_now = 0; //sampling timer
+unsigned long time_now2 = 0; //filter timer
 unsigned long time_now3 = 0; //time now untuk mqtt
 
 
@@ -143,6 +173,9 @@ bool isAttach() {
 }
 
 
+void publishECGData(int nilaiSignal) {
+  mqttHardware.publish("hardware1", String(nilaiSignal).c_str());
+}
 
 void setup() {
 
@@ -158,20 +191,25 @@ void setup() {
   oled.display();
   delay(20);
 
+  oled.println("Connecting Wifi...");
+  oled.display();
 
   /*WIFI INITIALIZATION*/
-  //  WiFi.begin(NAMA_AP, PASSWD);
-  //  while (WiFi.status() != WL_CONNECTED) {
-  //    delay(500);
-  //  }
-
-
-
-
+  WiFi.begin(NAMA_AP, PASSWD);
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+  }
+  mqttHardware.setServer(mqtt_server, mqttPort);
 
 }
 
 void loop() {
+
+  if (!mqttHardware.connected()) {
+    reconnect();
+  }
+  mqttHardware.loop();
+
 
   if (isAttach() == 0) {
     oled.setRotation(0);
@@ -203,15 +241,7 @@ void loop() {
       x = 0;
       lastX = 0;
     }
-    //    if (millis() > time_now3 + periode_mqtt) {
-    //      MQTT_connect();
-    //      if (!dataSinyal.publish(yData )) {
-    //        Serial.println("Failed");
-    //      } else {
-    //        Serial.println("OK");
-    //      }
-    //      time_now3 = millis();
-    //    }
+
     if (millis() > time_now2 + periode) {
       time_now2 = millis();
       sensorValue = analogRead(A0);    //read the sensor value using ADC
@@ -220,6 +250,10 @@ void loop() {
       filteredSignal = BandPassFilter(filteredSignal);
       filteredSignal = LowPassFilter(filteredSignal);
 
+    }
+    if (millis() > time_now3 + periode_mqtt) {
+      publishECGData(filteredSignal);
+      time_now3 = millis();
     }
 
     if (millis() > time_now + periode) {
