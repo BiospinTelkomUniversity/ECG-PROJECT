@@ -3,10 +3,19 @@
 #include <Wire.h>
 #include <Adafruit_SSD1306.h>
 
-
 #define NAMA_AP ""
 #define PASSWD ""
 
+//delay setting
+int periode = 10; //delay per 10 milidetik sampling rate=100Hz
+int periode_mqtt = 10; //per 10 milidetik,mengirim data sebanyak data bufferECG
+int periode_flag = 500; //per 500 milidetik,untuk mengecek apakah hentikan mengirim data atau tida
+
+
+unsigned long time_now = 0; //sampling timer
+unsigned long time_now2 = 0; //filter timer
+unsigned long time_now3 = 0; //untuk send data ke broker mqtt
+unsigned long time_now4 = 0; //subscribe topic mqtt
 
 
 /*INITIALIZATION MQTT*/
@@ -14,6 +23,8 @@ const char* mqttUser = "";
 const char* mqttPassword = "";
 const char* mqtt_server = "";
 const int mqttPort = 1883;
+const char* hardwareTarget = "";
+bool stateSend = true;
 
 WiFiClient espclient;
 PubSubClient mqttHardware(espclient);
@@ -27,11 +38,12 @@ void reconnect() {
     clientId += String(random(0xffff), HEX);
     // Attempt to connect
     if (mqttHardware.connect(clientId.c_str())) {
+      mqttHardware.subscribe("stopFlag");
     } else {
       Serial.print("failed, rc=");
       Serial.print(mqttHardware.state());
       Serial.println(" try again in 5 seconds");
-      
+
       // Wait 5 seconds before retrying
       unsigned long interval_now = millis();
       while (millis() > interval_now + 5000);
@@ -39,11 +51,38 @@ void reconnect() {
   }
 }
 
+void callbackSubs(String topic, byte* message, unsigned int length) {
+  String messageTemp;
+  for (int i = 0; i < length; i++) {
+    Serial.print((char)message[i]);
+    messageTemp += (char)message[i];
+  }
+
+  if (topic == "stopFlag") {
+
+    //jika true maka berhenti mengirim data ke broker
+    if (messageTemp == "true") {
+      stateSend = false;
+    }
+    //jika false, tetap mengirim data ke broker
+    else if (messageTemp == "false") {
+      stateSend = true;
+    }
+  }
+}
+
+
+void publishECGData(int buffer) {
+
+  mqttHardware.publish(hardwareTarget, String(buffer).c_str());
+}
 
 /*END*/
 
+
+/* SIGNAL PROCESSING ECG */
 int sensorValue = 0;
-int filteredSignal = 0;
+float filteredSignal = 0;
 
 //Reserve for adjusting flow program
 bool ElectrodePlug = false;
@@ -64,13 +103,6 @@ int yData = 0;
 int lastX = 0;
 int lastY = 0;
 int lastTime = 0;
-
-//delay setting
-int periode = 10; //delay per 10 milidetik sampling rate=100Hz
-int periode_mqtt = 10;
-unsigned long time_now = 0; //sampling timer
-unsigned long time_now2 = 0; //filter timer
-unsigned long time_now3 = 0; //time now untuk mqtt
 
 
 /*Bandstop Filter
@@ -163,6 +195,7 @@ int LowPassFilter(float analogValue) {
   return yvLPF[6];
 }
 
+/*END CODE SIGNAL PROCESSING*/
 
 bool isAttach() {
   if ((digitalRead(D5) == 1 && digitalRead(D6) == 1)) {
@@ -173,9 +206,7 @@ bool isAttach() {
 }
 
 
-void publishECGData(int nilaiSignal) {
-  mqttHardware.publish("hardware1", String(nilaiSignal).c_str());
-}
+
 
 void setup() {
 
@@ -191,6 +222,7 @@ void setup() {
   oled.display();
   delay(20);
 
+  oled.println(hardwareTarget);
   oled.println("Connecting Wifi...");
   oled.display();
 
@@ -200,6 +232,7 @@ void setup() {
     delay(500);
   }
   mqttHardware.setServer(mqtt_server, mqttPort);
+  mqttHardware.setCallback(callbackSubs);
 
 }
 
@@ -249,11 +282,12 @@ void loop() {
       filteredSignal = HighPassFilter(filteredSignal );
       filteredSignal = BandPassFilter(filteredSignal);
       filteredSignal = LowPassFilter(filteredSignal);
-
     }
-    if (millis() > time_now3 + periode_mqtt) {
-      publishECGData(filteredSignal);
+    if (millis() > time_now3 + periode_mqtt && stateSend == 1) {
       time_now3 = millis();
+      publishECGData(filteredSignal);
+
+
     }
 
     if (millis() > time_now + periode) {
