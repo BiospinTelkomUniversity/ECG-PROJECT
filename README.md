@@ -1,6 +1,6 @@
 # ElectroCardiograph Wireless IoT
 
-These Project purposely to do monitoring on Heart condition on patients, and acquire the data (heart condition) to computer using Internet of Things. The further development still needed to make this system perfect.
+These Project purposely to monitoring on Heart condition on patients, and acquire the data (heart condition) to computer using Internet of Things. The further development still needed to make this system perfect.
 
 ## Getting Started
 
@@ -10,29 +10,26 @@ These instructions will get you a copy of the project up and running on your loc
 
 In this repository, there are 3 Sub File which group based on the folder name 
 
-```
-
-Web Sites : 
-
+####Web Sites : 
 * NodeJS
 
 
-```
 
-```
-Microcontroller  (Using Arduino Framework): 
+
+
+####Microcontroller  (Using Arduino Framework): 
+
 
 * PubSubClient 
 * Adafruit SSD1306 (OLED Library)
 
-```
 
-```
-Raspberry Pi :
+
+####Raspberry Pi :
 * NodeRed
 
 
-```
+
 
 
 ### Installing
@@ -87,9 +84,7 @@ Add additional notes about how to deploy this on a live system
 
 Please read [CONTRIBUTING.md](https://gist.github.com/PurpleBooth/b24679402957c63ec426) for details on our code of conduct, and the process for submitting pull requests to us.
 
-## Versioning
 
-We use [SemVer](http://semver.org/) for versioning. For the versions available, see the [tags on this repository](https://github.com/your/project/tags). 
 
 ## Authors
 
@@ -103,7 +98,7 @@ This project is licensed under the MIT License - see the [LICENSE.md](LICENSE.md
 
 ## Acknowledgments
 
-* Hat tip to anyone whose code was used
+* [mkfilter](http://www-users.cs.york.ac.uk/~fisher/mkfilter/) for generated code for filtering signal. 
 * Inspiration
 * etc
 
