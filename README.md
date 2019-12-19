@@ -8,28 +8,10 @@ These instructions will get you a copy of the project up and running on your loc
 
 ### Prerequisites
 
-In this repository, there are 3 Sub File which group based on the folder name 
+In this repository, there are two sub File which group based on the folder name
 
-#### Web Sites : 
-* NodeJS
-
-
-
-
-
-#### Microcontroller  (Using Arduino Framework): 
-
-
-* PubSubClient 
-* Adafruit SSD1306 (OLED Library)
-
-
-
-#### Raspberry Pi :
-* NodeRed
-
-
-
+* [Arduino ESP8266] (github.com)
+* [Raspberry Pi] (github.com)
 
 
 ### Installing
