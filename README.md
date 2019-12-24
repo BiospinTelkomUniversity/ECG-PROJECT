@@ -10,7 +10,7 @@ These instructions will get you a copy of the project up and running on your loc
 
 In this repository, there are two sub File which group based on the folder name
 
-* [Arduino ESP8266](github.com)
+* [ESP8266](github.com)
 * [Raspberry Pi](github.com)
 
 
