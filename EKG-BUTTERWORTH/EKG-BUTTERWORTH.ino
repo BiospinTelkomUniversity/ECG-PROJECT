@@ -12,6 +12,11 @@ int periode_mqtt = 10; //per 10 milidetik,mengirim data sebanyak data bufferECG
 int periode_flag = 500; //per 500 milidetik,untuk mengecek apakah hentikan mengirim data atau tida
 
 
+//electrode indicator
+bool ElectrodePlug = false;
+bool lastPlug = false;
+
+//sampling rate setting
 unsigned long time_now = 0; //sampling timer
 unsigned long time_now2 = 0; //filter timer
 unsigned long time_now3 = 0; //untuk send data ke broker mqtt
@@ -24,7 +29,7 @@ const char* mqttPassword = "";
 const char* mqtt_server = "";
 const int mqttPort = 1883;
 const char* hardwareTarget = "";
-bool stateSend = true;
+bool stateSend = false;
 
 WiFiClient espclient;
 PubSubClient mqttHardware(espclient);
@@ -62,11 +67,11 @@ void callbackSubs(String topic, byte* message, unsigned int length) {
 
     //jika true maka berhenti mengirim data ke broker
     if (messageTemp == "true") {
-      stateSend = false;
+      stateSend = true;
     }
     //jika false, tetap mengirim data ke broker
     else if (messageTemp == "false") {
-      stateSend = true;
+      stateSend = false;
     }
   }
 }
@@ -81,15 +86,14 @@ void publishECGData(int buffer) {
 
 
 /* SIGNAL PROCESSING ECG */
-int sensorValue = 0;
+float Signalnow = 0; //K+1
+float Signallast = 0; //K-1
+
 float filteredSignal = 0;
+bool qrsDone = false; // menandakan satu cycle sinyal QRS sudah selesai atau belum
 
-//Reserve for adjusting flow program
-bool ElectrodePlug = false;
-bool lastPlug = false;
+float voltageValue = 0.0; //untuk ditampilkan di OLED
 
-int EMA_S_low = 0;          //initialization of EMA S
-int EMA_S_high = 0;
 
 //setup ole
 #define OLED_Address 0x3C
@@ -103,6 +107,19 @@ int yData = 0;
 int lastX = 0;
 int lastY = 0;
 int lastTime = 0;
+
+
+float differensial(float sampleSebelum, float sampleSesudah) {
+  return (1 / 2 * 100) * (sampleSesudah * sampleSebelum);
+}
+
+int getBPM(float input) {
+  return int(60 / (float(input) / 1000));
+}
+
+float convertToVoltage(int analogValue) {
+  return (analogValue * ( 1.5 / 1024));
+}
 
 
 /*Bandstop Filter
@@ -207,7 +224,6 @@ bool isAttach() {
 
 
 
-
 void setup() {
 
   // initialize the serial communication:
@@ -231,17 +247,39 @@ void setup() {
   while (WiFi.status() != WL_CONNECTED) {
     delay(500);
   }
+  oled.setCursor(0, 0);
+  oled.clearDisplay();
+  oled.setTextColor(WHITE);
+
+  oled.println(hardwareTarget);
+  oled.println("Connecting MQTT...");
+  oled.display();
+  delay(20);
+
   mqttHardware.setServer(mqtt_server, mqttPort);
   mqttHardware.setCallback(callbackSubs);
 
+  oled.setCursor(0, 0);
+  oled.clearDisplay();
+  oled.setTextColor(WHITE);
+
+  oled.setCursor(11, 10);
+  oled.println("MOHON PASANG");
+  oled.setCursor(20, 19);
+  oled.println("ELEKTRODA!");
+  oled.display();
+  delay(20);
+  while (isAttach() != 1) {
+    delay(500);
+  }
 }
 
 void loop() {
 
-  if (!mqttHardware.connected()) {
-    reconnect();
-  }
-  mqttHardware.loop();
+  //    if (!mqttHardware.connected()) {
+  //      reconnect();
+  //    }
+  //    mqttHardware.loop();
 
 
   if (isAttach() == 0) {
@@ -277,11 +315,14 @@ void loop() {
 
     if (millis() > time_now2 + periode) {
       time_now2 = millis();
-      sensorValue = analogRead(A0);    //read the sensor value using ADC
+      int sensorValue = analogRead(A0);    //read the sensor value using ADC
+
       filteredSignal = BandStopFilter(sensorValue);
       filteredSignal = HighPassFilter(filteredSignal );
       filteredSignal = BandPassFilter(filteredSignal);
       filteredSignal = LowPassFilter(filteredSignal);
+
+
     }
     if (millis() > time_now3 + periode_mqtt && stateSend == 1) {
       time_now3 = millis();
@@ -291,6 +332,15 @@ void loop() {
     }
 
     if (millis() > time_now + periode) {
+      // do differentiation
+      //      float signalDiff = differensial( Signalnow, Signallast);
+      //      Serial.println(signalDiff); //testing purposes
+      /**
+        TO DO :
+        1. Bikin proses adaptive threshold
+        2. lakukan deteksi interval r
+        3. hitung bpm
+      */
 
       yData = 20 - (filteredSignal / 32);
       oled.writeLine(lastX, lastY, x, yData, WHITE);
@@ -301,7 +351,6 @@ void loop() {
       x++;
       time_now = millis();
       oled.display();
-
     }
     lastPlug = 1;
   }
