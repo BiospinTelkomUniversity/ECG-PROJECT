@@ -2,6 +2,10 @@
 
 These Project purposely to monitoring on Heart condition on patients, and acquire the data (heart condition) to computer using Internet of Things. The further development still needed to make this system perfect.
 
+
+## How Does It's Works
+This section will explain how the systems is works.
+
 ## Getting Started
 
 These instructions will get you a copy of the project up and running on your local machine for development and testing purposes. See deployment for notes on how to deploy the project on a live system.
