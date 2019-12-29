@@ -12,7 +12,7 @@ These instructions will get you a copy of the project up and running on your loc
 
 ### Installing
 
-In this repository, there are two sub File which group based on the folder name
+In this repository, There is two sub file which group based on the folder name
 
 * [ESP8266](github.com)
 * [Raspberry Pi](github.com)
@@ -40,9 +40,9 @@ This project is licensed under the GNU General Public License v3.0 - see the [LI
 
 ## Acknowledgments
 
-* [mkfilter](http://www-users.cs.york.ac.uk/~fisher/mkfilter/) for generated code for filtering signal. 
-* Inspiration
-* etc
+* [mkfilter](http://www-users.cs.york.ac.uk/~fisher/mkfilter/) For generated code for filtering signal using Butterworth. 
+* [A Low Cost ECG Monitoring System with ECG Data Filtering](https://www.researchgate.net/publication/326493147_A_Low_Cost_ECG_Monitoring_System_with_ECG_Data_Filtering)
+* [ECG Removal Noise](http://www-classes.usc.edu/engr/bme/620/LectureECGNoise.pdf)
 
 
 
