@@ -3,8 +3,8 @@
 #include <Wire.h>
 #include <Adafruit_SSD1306.h>
 
-#define NAMA_AP ""
-#define PASSWD ""
+#define NAMA_AP "lab104"
+#define PASSWD "enaksekali"
 
 //delay setting
 int periode = 10; //delay per 10 milidetik sampling rate=100Hz
@@ -12,6 +12,11 @@ int periode_mqtt = 10; //per 10 milidetik,mengirim data sebanyak data bufferECG
 int periode_flag = 500; //per 500 milidetik,untuk mengecek apakah hentikan mengirim data atau tida
 
 
+//electrode indicator
+bool ElectrodePlug = false;
+bool lastPlug = false;
+
+//sampling rate setting
 unsigned long time_now = 0; //sampling timer
 unsigned long time_now2 = 0; //filter timer
 unsigned long time_now3 = 0; //untuk send data ke broker mqtt
@@ -19,12 +24,12 @@ unsigned long time_now4 = 0; //subscribe topic mqtt
 
 
 /*INITIALIZATION MQTT*/
-const char* mqttUser = "";
-const char* mqttPassword = "";
-const char* mqtt_server = "";
+const char* mqttUser = "biospin";
+const char* mqttPassword = "biospin";
+const char* mqtt_server = "raspberrypi";
 const int mqttPort = 1883;
-const char* hardwareTarget = "";
-bool stateSend = true;
+const char* hardwareTarget = "hardware1";
+bool stateSend = false;
 
 WiFiClient espclient;
 PubSubClient mqttHardware(espclient);
@@ -62,11 +67,11 @@ void callbackSubs(String topic, byte* message, unsigned int length) {
 
     //jika true maka berhenti mengirim data ke broker
     if (messageTemp == "true") {
-      stateSend = false;
+      stateSend = true;
     }
     //jika false, tetap mengirim data ke broker
     else if (messageTemp == "false") {
-      stateSend = true;
+      stateSend = false;
     }
   }
 }
@@ -81,15 +86,20 @@ void publishECGData(int buffer) {
 
 
 /* SIGNAL PROCESSING ECG */
-int sensorValue = 0;
+float SignalNow = 0; //K+1
+float SignalLast = 0; //K
 float filteredSignal = 0;
+float signalDiff = 0;
+float upperThreshold = 0;
+float lowerThreshold = 0;
+int BPMHeart = 0;
 
-//Reserve for adjusting flow program
-bool ElectrodePlug = false;
-bool lastPlug = false;
+long lastTimeInterval = 0; //untuk parameter penentuan interval waktu Peak to Peak
+bool BPMTiming = false;
+bool qrsDone = false; // menandakan satu cycle sinyal QRS sudah selesai atau belum
+bool firstTime = true;
+float voltageValue = 0.0; //untuk ditampilkan di OLED
 
-int EMA_S_low = 0;          //initialization of EMA S
-int EMA_S_high = 0;
 
 //setup ole
 #define OLED_Address 0x3C
@@ -98,11 +108,25 @@ int EMA_S_high = 0;
 Adafruit_SSD1306 oled(128, 32, &Wire, -1, 800000, 800000);
 int x = 0;
 int yData = 0;
+int yLastData = 0; // for differential purposes(to compare n data and n-1 data
 
 //untuk plot kontinu
 int lastX = 0;
 int lastY = 0;
 int lastTime = 0;
+
+
+float differensial(float diffSignal) {
+  return ((1 * diffSignal) / (2 * 100));
+}
+
+int getBPM(float input) {
+  return int(60 / (float(input) / 1000));
+}
+
+float convertToVoltage(int analogValue) {
+  return (analogValue * ( 1.5 / 1024));
+}
 
 
 /*Bandstop Filter
@@ -207,7 +231,6 @@ bool isAttach() {
 
 
 
-
 void setup() {
 
   // initialize the serial communication:
@@ -231,17 +254,39 @@ void setup() {
   while (WiFi.status() != WL_CONNECTED) {
     delay(500);
   }
+  oled.setCursor(0, 0);
+  oled.clearDisplay();
+  oled.setTextColor(WHITE);
+
+  oled.println(hardwareTarget);
+  oled.println("Connecting MQTT...");
+  oled.display();
+  delay(20);
+
   mqttHardware.setServer(mqtt_server, mqttPort);
   mqttHardware.setCallback(callbackSubs);
 
+  oled.setCursor(0, 0);
+  oled.clearDisplay();
+  oled.setTextColor(WHITE);
+
+  oled.setCursor(11, 10);
+  oled.println("MOHON PASANG");
+  oled.setCursor(20, 19);
+  oled.println("ELEKTRODA!");
+  oled.display();
+  delay(20);
+  while (isAttach() != 1) {
+    delay(500);
+  }
 }
 
 void loop() {
 
-  if (!mqttHardware.connected()) {
-    reconnect();
-  }
-  mqttHardware.loop();
+  //    if (!mqttHardware.connected()) {
+  //      reconnect();
+  //    }
+  //    mqttHardware.loop();
 
 
   if (isAttach() == 0) {
@@ -277,11 +322,14 @@ void loop() {
 
     if (millis() > time_now2 + periode) {
       time_now2 = millis();
-      sensorValue = analogRead(A0);    //read the sensor value using ADC
+      int sensorValue = analogRead(A0);    //read the sensor value using ADC
+
       filteredSignal = BandStopFilter(sensorValue);
       filteredSignal = HighPassFilter(filteredSignal );
       filteredSignal = BandPassFilter(filteredSignal);
       filteredSignal = LowPassFilter(filteredSignal);
+
+
     }
     if (millis() > time_now3 + periode_mqtt && stateSend == 1) {
       time_now3 = millis();
@@ -292,17 +340,65 @@ void loop() {
 
     if (millis() > time_now + periode) {
 
-      yData = 20 - (filteredSignal / 32);
-      oled.writeLine(lastX, lastY, x, yData, WHITE);
+      if (filteredSignal != yLastData) {
+        // do differentiation and this will be the main parameter to do Peak to Peak detection
+        signalDiff = differensial( filteredSignal - yLastData);
 
-      lastY = yData;
+        yLastData = filteredSignal;
+
+      }
+      //scaling data to OLED
+      int scaledData = map(yLastData , -512, 512, 10, 30 );
+
+      oled.writeLine(lastX, lastY, x, scaledData, WHITE);
+
+      lastY = scaledData;
       lastX = x;
 
       x++;
       time_now = millis();
       oled.display();
 
+      // update threshold
+      if (firstTime == true) {
+        upperThreshold = 0.5 * 2.03;
+        lowerThreshold = 0.10 * -2.40;
+
+      } else {
+        upperThreshold = upperThreshold + (0.155 * (upperThreshold - lowerThreshold));
+        lowerThreshold = lowerThreshold - (0.155 * (upperThreshold - lowerThreshold));
+      }
+
     }
+
+    //detect R signal
+    if (signalDiff > upperThreshold) {
+      if (qrsDone) {
+
+        BPMHeart  = millis() - lastTimeInterval;
+        BPMHeart = getBPM(BPMHeart);
+        qrsDone = false;
+        BPMTiming = false;
+        if (BPMHeart < 200) {
+          String temp = "BPM : " + String(BPMHeart);
+          Serial.println(temp);
+          //update to oled 
+        }
+
+      }
+      if (BPMTiming == false) {
+
+        lastTimeInterval = millis();
+        BPMTiming = true;
+
+      }
+
+    }
+
+    if ((signalDiff < lowerThreshold) && (BPMTiming)) {
+      qrsDone = true;
+    }
+
     lastPlug = 1;
   }
 
