@@ -88,11 +88,16 @@ void publishECGData(int buffer) {
 /* SIGNAL PROCESSING ECG */
 float SignalNow = 0; //K+1
 float SignalLast = 0; //K
-bool isFuture = false; //maksud dari variable ini adalah state nya apakah sudah K+1 atau masih K, jika false jangan pindahkan data ke signalLast
-
 float filteredSignal = 0;
-bool qrsDone = false; // menandakan satu cycle sinyal QRS sudah selesai atau belum
+float signalDiff = 0;
+float upperThreshold = 0;
+float lowerThreshold = 0;
+int BPMHeart = 0;
 
+long lastTimeInterval = 0; //untuk parameter penentuan interval waktu Peak to Peak
+bool BPMTiming = false;
+bool qrsDone = false; // menandakan satu cycle sinyal QRS sudah selesai atau belum
+bool firstTime = true;
 float voltageValue = 0.0; //untuk ditampilkan di OLED
 
 
@@ -335,34 +340,65 @@ void loop() {
 
     if (millis() > time_now + periode) {
 
-      //scaling data to OLED
-      yData = 20 - (filteredSignal / 32);
-      // do differentiation
-      /**
-        TO DO :
-        1. Bikin proses adaptive threshold
-        2. lakukan deteksi interval r
-        3. hitung bpm
-      */
       if (filteredSignal != yLastData) {
-        //        String logdat = "Before : " + String(filteredSignal) + "\t" + "After : " + String(yLastData);
-        float signalDiff = differensial( filteredSignal - yLastData);
-        yLastData = filteredSignal;
-        Serial.println(signalDiff);
+        // do differentiation and this will be the main parameter to do Peak to Peak detection
+        signalDiff = differensial( filteredSignal - yLastData);
 
+        yLastData = filteredSignal;
 
       }
+      //scaling data to OLED
+      int scaledData = map(yLastData , -512, 512, 10, 30 );
 
+      oled.writeLine(lastX, lastY, x, scaledData, WHITE);
 
-      oled.writeLine(lastX, lastY, x, yData, WHITE);
-
-      lastY = yData;
+      lastY = scaledData;
       lastX = x;
 
       x++;
       time_now = millis();
       oled.display();
+
+      // update threshold
+      if (firstTime == true) {
+        upperThreshold = 0.5 * 2.03;
+        lowerThreshold = 0.10 * -2.40;
+
+      } else {
+        upperThreshold = upperThreshold + (0.155 * (upperThreshold - lowerThreshold));
+        lowerThreshold = lowerThreshold - (0.155 * (upperThreshold - lowerThreshold));
+      }
+
     }
+
+    //detect R signal
+    if (signalDiff > upperThreshold) {
+      if (qrsDone) {
+
+        BPMHeart  = millis() - lastTimeInterval;
+        BPMHeart = getBPM(BPMHeart);
+        qrsDone = false;
+        BPMTiming = false;
+        if (BPMHeart < 200) {
+          String temp = "BPM : " + String(BPMHeart);
+          Serial.println(temp);
+          //update to oled 
+        }
+
+      }
+      if (BPMTiming == false) {
+
+        lastTimeInterval = millis();
+        BPMTiming = true;
+
+      }
+
+    }
+
+    if ((signalDiff < lowerThreshold) && (BPMTiming)) {
+      qrsDone = true;
+    }
+
     lastPlug = 1;
   }
 
