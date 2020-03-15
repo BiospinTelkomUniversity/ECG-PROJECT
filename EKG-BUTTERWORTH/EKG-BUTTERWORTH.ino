@@ -3,8 +3,8 @@
 #include <Wire.h>
 #include <Adafruit_SSD1306.h>
 
-#define NAMA_AP "lab104"
-#define PASSWD "enaksekali"
+#define NAMA_AP ""
+#define PASSWD ""
 
 //delay setting
 int periode = 10; //delay per 10 milidetik sampling rate=100Hz
@@ -313,7 +313,7 @@ void loop() {
 
     }
     //kondisi overflow, perlu di reset lagi
-    else if (x > 128) {
+    else if (x > 96) {
 
       oled.clearDisplay();
       x = 0;
