@@ -1,10 +1,15 @@
+#include <FS.h>
+
+#include <DNSServer.h>
+#include <ESP8266WebServer.h>
 #include <PubSubClient.h>
 #include <ESP8266WiFi.h>
+#include <ArduinoJson.h>
+#include <WiFiManager.h>
+
 #include <Wire.h>
 #include <Adafruit_SSD1306.h>
 
-#define NAMA_AP ""
-#define PASSWD ""
 
 //delay setting
 int periode = 10; //delay per 10 milidetik sampling rate=100Hz
@@ -26,13 +31,18 @@ unsigned long time_now4 = 0; //subscribe topic mqtt
 /*INITIALIZATION MQTT*/
 const char* mqttUser = "biospin";
 const char* mqttPassword = "biospin";
-const char* mqtt_server = "raspberrypi";
+char mqtt_server[100];
 const int mqttPort = 1883;
 const char* hardwareTarget = "hardware1";
 bool stateSend = false;
 
 WiFiClient espclient;
 PubSubClient mqttHardware(espclient);
+
+
+//another variable
+bool shouldSaveConfig = false;
+
 
 void reconnect() {
   // Loop until we're reconnected
@@ -77,10 +87,12 @@ void callbackSubs(String topic, byte* message, unsigned int length) {
 }
 
 
-void publishECGData(int buffer) {
+void publishECGData(float buffer , int bpm) {
 
   mqttHardware.publish(hardwareTarget, String(buffer).c_str());
+  mqttHardware.publish("hardware1_bpm", String(bpm).c_str());
 }
+
 
 /*END*/
 
@@ -229,6 +241,11 @@ bool isAttach() {
   }
 }
 
+//callback notifying us of the need to save config
+void saveConfigCallback () {
+  Serial.println("Should save config");
+  shouldSaveConfig = true;
+}
 
 
 void setup() {
@@ -248,12 +265,105 @@ void setup() {
   oled.println(hardwareTarget);
   oled.println("Connecting Wifi...");
   oled.display();
+  /*WifiManager Section*/
 
-  /*WIFI INITIALIZATION*/
-  WiFi.begin(NAMA_AP, PASSWD);
-  while (WiFi.status() != WL_CONNECTED) {
-    delay(500);
+  // put your setup code here, to run once:
+  Serial.begin(115200);
+  Serial.println();
+
+  //clean FS, for testing
+  //SPIFFS.format();
+
+  //read configuration from FS json
+  Serial.println("mounting FS...");
+
+  if (SPIFFS.begin()) {
+    Serial.println("mounted file system");
+    if (SPIFFS.exists("/config.json")) {
+      //file exists, reading and loading
+      Serial.println("reading config file");
+      File configFile = SPIFFS.open("/config.json", "r");
+      if (configFile) {
+        Serial.println("opened config file");
+        size_t size = configFile.size();
+        // Allocate a buffer to store contents of the file.
+        std::unique_ptr<char[]> buf(new char[size]);
+
+        configFile.readBytes(buf.get(), size);
+        DynamicJsonBuffer jsonBuffer;
+        JsonObject& json = jsonBuffer.parseObject(buf.get());
+        json.printTo(Serial);
+        if (json.success()) {
+          Serial.println("\nparsed json");
+
+          strcpy(mqtt_server, json["mqtt_server"]);
+
+        } else {
+          Serial.println("failed to load json config");
+        }
+        configFile.close();
+      }
+    }
+  } else {
+    Serial.println("failed to mount FS");
   }
+
+
+  // The extra parameters to be configured (can be either global or just in the setup)
+  // After connecting, parameter.getValue() will get you the configured value
+
+  // constructor format : id/name, placeholder/prompt, default length
+  WiFiManagerParameter custom_mqtt_server("server", "mqtt_server", mqtt_server, 100);
+
+  //WiFiManager
+  //Local intialization. Once its business is done, there is no need to keep it around
+  WiFiManager wifiManager;
+
+  //set config save notify callback
+  wifiManager.setSaveConfigCallback(saveConfigCallback);
+
+  //set static ip
+  wifiManager.setSTAStaticIPConfig(IPAddress(10, 0, 1, 99), IPAddress(10, 0, 1, 1), IPAddress(255, 255, 255, 0));
+
+  //add all your parameters here
+  wifiManager.addParameter(&custom_mqtt_server);
+
+  //add paramaters
+  wifiManager.addParameter(&custom_mqtt_server);
+  oled.setCursor(0, 0);
+  oled.clearDisplay();
+  oled.setTextColor(WHITE);
+  if (!wifiManager.autoConnect(hardwareTarget, "biospin12345")) {
+
+    oled.println("Failed To Connect Wifi!");
+    delay(3000);
+    //reset and try again, or maybe put it to deep sleep
+    ESP.reset();
+    delay(5000);
+  }
+  //read updated params
+  strcpy(mqtt_server, custom_mqtt_server.getValue());
+
+  //save the custom parameters to FS
+  if (shouldSaveConfig) {
+    Serial.println("saving config");
+    DynamicJsonBuffer jsonBuffer;
+    JsonObject& json = jsonBuffer.createObject();
+    json["mqtt_server"] = mqtt_server;
+
+    File configFile = SPIFFS.open("/config.json", "w");
+    if (!configFile) {
+      Serial.println("failed to open config file for writing");
+    }
+
+    json.printTo(Serial);
+    json.printTo(configFile);
+    configFile.close();
+    //end save
+  }
+
+  /*WifiManager section End*/
+
   oled.setCursor(0, 0);
   oled.clearDisplay();
   oled.setTextColor(WHITE);
@@ -283,10 +393,10 @@ void setup() {
 
 void loop() {
 
-  //    if (!mqttHardware.connected()) {
-  //      reconnect();
-  //    }
-  //    mqttHardware.loop();
+  if (!mqttHardware.connected()) {
+    reconnect();
+  }
+  mqttHardware.loop();
 
 
   if (isAttach() == 0) {
@@ -333,7 +443,7 @@ void loop() {
     }
     if (millis() > time_now3 + periode_mqtt && stateSend == 1) {
       time_now3 = millis();
-      publishECGData(filteredSignal);
+      publishECGData(convertToVoltage(filteredSignal), BPMHeart);
 
 
     }
@@ -375,14 +485,16 @@ void loop() {
     if (signalDiff > upperThreshold) {
       if (qrsDone) {
 
-        BPMHeart  = millis() - lastTimeInterval;
-        BPMHeart = getBPM(BPMHeart);
+        int bufferBPM  = millis() - lastTimeInterval;
+        bufferBPM = getBPM(bufferBPM);
         qrsDone = false;
         BPMTiming = false;
-        if (BPMHeart < 200) {
+        if (bufferBPM < 200) {
           String temp = "BPM : " + String(BPMHeart);
           Serial.println(temp);
-          //update to oled 
+          //update to oled
+          //          publishECGBPM( BPMHeart);
+          BPMHeart = bufferBPM;
         }
 
       }
