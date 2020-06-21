@@ -337,7 +337,7 @@ void setup() {
     delay(5000);
   }
   //read updated params
-  if (custom_mqtt_server.getValue() == "") {
+  if (custom_mqtt_server.getValue() == NULL) {
     strcpy(mqtt_server, "Null");
   } else {
     strcpy(mqtt_server, custom_mqtt_server.getValue());
