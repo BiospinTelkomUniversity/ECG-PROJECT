@@ -35,6 +35,7 @@ char mqtt_server[100];
 const int mqttPort = 1883;
 const char* hardwareTarget = "hardware1";
 bool stateSend = false;
+bool turnMQTT = false; //to Deactivate MQTT Transmit
 
 WiFiClient espclient;
 PubSubClient mqttHardware(espclient);
@@ -314,6 +315,7 @@ void setup() {
 
   // constructor format : id/name, placeholder/prompt, default length
   WiFiManagerParameter custom_mqtt_server("server", "mqtt_server", mqtt_server, 100);
+  WiFiManagerParameter mode_mqtt("modeMQTT", "turnMQTT", (char*)turnMQTT, 1);
 
   //WiFiManager
   //Local intialization. Once its business is done, there is no need to keep it around
@@ -322,27 +324,27 @@ void setup() {
   //set config save notify callback
   wifiManager.setSaveConfigCallback(saveConfigCallback);
 
-  //set static ip
-  wifiManager.setSTAStaticIPConfig(IPAddress(10, 0, 1, 99), IPAddress(10, 0, 1, 1), IPAddress(255, 255, 255, 0));
-
   //add all your parameters here
   wifiManager.addParameter(&custom_mqtt_server);
+  wifiManager.addParameter(&mode_mqtt);
 
-  //add paramaters
-  wifiManager.addParameter(&custom_mqtt_server);
-  oled.setCursor(0, 0);
-  oled.clearDisplay();
-  oled.setTextColor(WHITE);
+
+
   if (!wifiManager.autoConnect(hardwareTarget, "biospin12345")) {
-
-    oled.println("Failed To Connect Wifi!");
     delay(3000);
     //reset and try again, or maybe put it to deep sleep
     ESP.reset();
     delay(5000);
   }
   //read updated params
-  strcpy(mqtt_server, custom_mqtt_server.getValue());
+  if (custom_mqtt_server.getValue() == "") {
+    strcpy(mqtt_server, "Null");
+  } else {
+    strcpy(mqtt_server, custom_mqtt_server.getValue());
+  }
+
+  turnMQTT = mode_mqtt.getValue();
+  Serial.println(mode_mqtt.getValue());
 
   //save the custom parameters to FS
   if (shouldSaveConfig) {
@@ -367,14 +369,25 @@ void setup() {
   oled.setCursor(0, 0);
   oled.clearDisplay();
   oled.setTextColor(WHITE);
+  if (turnMQTT == false) {
+    oled.println(hardwareTarget);
+    oled.println("MQTT Turned Off...");
+    oled.display();
+    delay(20);
 
-  oled.println(hardwareTarget);
-  oled.println("Connecting MQTT...");
-  oled.display();
-  delay(20);
 
-  mqttHardware.setServer(mqtt_server, mqttPort);
-  mqttHardware.setCallback(callbackSubs);
+  } else if (turnMQTT == true) {
+    oled.println(hardwareTarget);
+    oled.println("Connecting MQTT...");
+    oled.display();
+    delay(20);
+
+    mqttHardware.setServer(mqtt_server, mqttPort);
+    mqttHardware.setCallback(callbackSubs);
+
+  }
+
+
 
   oled.setCursor(0, 0);
   oled.clearDisplay();
