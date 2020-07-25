@@ -298,6 +298,10 @@ void setup() {
           Serial.println("\nparsed json");
 
           strcpy(mqtt_server, json["mqtt_server"]);
+          char buffer[100];
+          strcpy(buffer, json["turnMQTT"]);
+          Serial.print("MQTT MODE :");
+          Serial.println(buffer);
 
         } else {
           Serial.println("failed to load json config");
@@ -344,7 +348,6 @@ void setup() {
   }
 
   turnMQTT = mode_mqtt.getValue();
-  Serial.println(mode_mqtt.getValue());
 
   //save the custom parameters to FS
   if (shouldSaveConfig) {
@@ -352,15 +355,19 @@ void setup() {
     DynamicJsonBuffer jsonBuffer;
     JsonObject& json = jsonBuffer.createObject();
     json["mqtt_server"] = mqtt_server;
+    json["turnMQTT"] = turnMQTT;
 
     File configFile = SPIFFS.open("/config.json", "w");
     if (!configFile) {
       Serial.println("failed to open config file for writing");
+    } else {
+      Serial.println("Success!");
+      json.printTo(Serial);
+      json.printTo(configFile);
     }
 
-    json.printTo(Serial);
-    json.printTo(configFile);
     configFile.close();
+
     //end save
   }
 
