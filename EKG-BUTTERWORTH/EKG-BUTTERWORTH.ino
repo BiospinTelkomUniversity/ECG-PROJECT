@@ -37,6 +37,8 @@ const char* hardwareTarget = "hardware1";
 bool stateSend = false; //to check if MQTT broker wanna receive data or not.
 bool turnMQTT = false; //to Deactivate MQTT Transmit
 
+//access point setting 
+const char* PASS="biospin12345";
 WiFiClient espclient;
 PubSubClient mqttHardware(espclient);
 
@@ -331,7 +333,7 @@ void setup() {
 
 
 
-  if (!wifiManager.autoConnect(hardwareTarget, "biospin12345")) {
+  if (!wifiManager.autoConnect(hardwareTarget,PASS)) {
 
     delay(3000);
     //reset and try again, or maybe put it to deep sleep
@@ -345,7 +347,7 @@ void setup() {
     strcpy(mqtt_server, custom_mqtt_server.getValue());
   }
   //to avoid pointer char compare integer
-  turnMQTT = mode_mqtt.getValue()!="0";
+  turnMQTT = !(mode_mqtt.getValue()!="0");
 
   //save the custom parameters to FS
   if (shouldSaveConfig) {
@@ -398,8 +400,7 @@ void setup() {
 }
 
 void loop() {
-  Serial.print("Mode MQTT LOOP:");
-  Serial.println(turnMQTT);
+
  //bug founded : turnMQTT still 1 although set to 0
   if (turnMQTT == true) {
 
