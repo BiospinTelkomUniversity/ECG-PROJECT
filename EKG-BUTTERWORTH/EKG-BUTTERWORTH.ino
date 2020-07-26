@@ -34,7 +34,7 @@ const char* mqttPassword = "biospin";
 char mqtt_server[100];
 const int mqttPort = 1883;
 const char* hardwareTarget = "hardware1";
-bool stateSend = false;
+bool stateSend = false; //to check if MQTT broker wanna receive data or not.
 bool turnMQTT = false; //to Deactivate MQTT Transmit
 
 WiFiClient espclient;
@@ -272,9 +272,6 @@ void setup() {
   Serial.begin(115200);
   Serial.println();
 
-  //clean FS, for testing
-  //SPIFFS.format();
-
   //read configuration from FS json
   Serial.println("mounting FS...");
 
@@ -319,7 +316,7 @@ void setup() {
 
   // constructor format : id/name, placeholder/prompt, default length
   WiFiManagerParameter custom_mqtt_server("server", "mqtt_server", mqtt_server, 100);
-  WiFiManagerParameter mode_mqtt("modeMQTT", "turnMQTT", (char*)turnMQTT, 1);
+  WiFiManagerParameter mode_mqtt("turnMQTT", "turnMQTT", (char*)turnMQTT, 1);
 
   //WiFiManager
   //Local intialization. Once its business is done, there is no need to keep it around
@@ -335,6 +332,7 @@ void setup() {
 
 
   if (!wifiManager.autoConnect(hardwareTarget, "biospin12345")) {
+
     delay(3000);
     //reset and try again, or maybe put it to deep sleep
     ESP.reset();
@@ -346,14 +344,15 @@ void setup() {
   } else {
     strcpy(mqtt_server, custom_mqtt_server.getValue());
   }
-
-  turnMQTT = mode_mqtt.getValue();
+  //to avoid pointer char compare integer
+  turnMQTT = mode_mqtt.getValue()!="0";
 
   //save the custom parameters to FS
   if (shouldSaveConfig) {
     Serial.println("saving config");
     DynamicJsonBuffer jsonBuffer;
     JsonObject& json = jsonBuffer.createObject();
+    //save parameter MQTT
     json["mqtt_server"] = mqtt_server;
     json["turnMQTT"] = turnMQTT;
 
@@ -373,21 +372,8 @@ void setup() {
 
   /*WifiManager section End*/
 
-  oled.setCursor(0, 0);
-  oled.clearDisplay();
-  oled.setTextColor(WHITE);
-  if (turnMQTT == false) {
-    oled.println(hardwareTarget);
-    oled.println("MQTT Turned Off...");
-    oled.display();
-    delay(20);
-
-
-  } else if (turnMQTT == true) {
-    oled.println(hardwareTarget);
-    oled.println("Connecting MQTT...");
-    oled.display();
-    delay(20);
+  //check if mqtt would be turn on or not
+  if (turnMQTT == true) {
 
     mqttHardware.setServer(mqtt_server, mqttPort);
     mqttHardware.setCallback(callbackSubs);
@@ -412,12 +398,16 @@ void setup() {
 }
 
 void loop() {
+  Serial.print("Mode MQTT LOOP:");
+  Serial.println(turnMQTT);
+ //bug founded : turnMQTT still 1 although set to 0
+  if (turnMQTT == true) {
 
-  if (!mqttHardware.connected()) {
-    reconnect();
+    if (!mqttHardware.connected()) {
+      reconnect();
+    }
+    mqttHardware.loop();
   }
-  mqttHardware.loop();
-
 
   if (isAttach() == 0) {
     oled.setRotation(0);
@@ -512,9 +502,13 @@ void loop() {
         if (bufferBPM < 200) {
           String temp = "BPM : " + String(BPMHeart);
           Serial.println(temp);
-          //update to oled
-          //          publishECGBPM( BPMHeart);
-          BPMHeart = bufferBPM;
+          //update oled to display BPM
+          oled.setCursor(100, 10);
+          oled.println(temp);
+          oled.display();
+
+          //publish to MQTT
+          // publishECGBPM( BPMHeart);
         }
 
       }
