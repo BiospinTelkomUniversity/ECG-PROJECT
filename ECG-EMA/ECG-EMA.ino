@@ -7,8 +7,8 @@
 #define FIREBASE_HOST "pengmas-ekg.firebaseio.com"
 #define FIREBASE_AUTH "4mkZwqFND27ZoFf7DUlvCAppYXm1eOR1OCq7pwth"
 
-#define NAMA_AP "lab104portable"
-#define PASSWD "enaksekali"
+#define NAMA_AP ""
+#define PASSWD ""
 
 
 //MQTT Setup
